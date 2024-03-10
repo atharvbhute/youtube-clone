@@ -4,7 +4,7 @@ import {User} from "../models/user.model.js"
 import uploadCloudinary from "../utils/cloudinary.js";
 import ApiResponse from "../utils/apiResponse.js";
  
-const registerUser = asyncHandler(async(req, res, next) => {
+const registerUser = asyncHandler(async(req, res, _) => {
     // get user details from frontens
     const {username, password, email, fullName} = req.body;
 
@@ -68,6 +68,68 @@ const registerUser = asyncHandler(async(req, res, next) => {
 
    // return response
    return res.status(200).json(new ApiResponse(200, userCreatedResponse));
+});
+
+
+const generateAccessAndRefreshToken = async(userId) => {
+    try {
+        const user = await User.findById(userId);
+        const accessToken =  user.generateAccessToken();
+        const refreshToken = user.generateRefreshToken();
+        user.refreshToken = refreshToken;
+        await user.save({validateBeforeSave : false});
+        return {accessToken, refreshToken};
+    } catch (error) {
+        throw new ApiErrors(500, "server failed to generate access token");
+    }
+}
+
+const loginUser = asyncHandler(async (req, res, _)=> {
+    // get data from body
+    const {username, email, password} = req.body;
+    //username or email
+    if (!username || !password) {
+        throw new ApiErrors(401, "Email or Password is required");
+    }
+    // find the user
+    const user = await User.findOne({
+        $or: {username, password}
+    }).select("-password"); // not selecting password so that can send direct object in response
+
+    if (!user) {
+        throw new ApiErrors(404, "user does not exist");
+    }
+
+    //password check
+    const isPasswordCorrect = await user.isPasswordCorrect(password);
+    
+    if (!isPasswordCorrect) {
+        throw new ApiErrors(402, "Password is incorrect");
+    }
+    // access and refresh token
+    const tokens = await generateAccessAndRefreshToken(user._id);
+    // send token in cokies
+    const {accessToken, refreshToken} = tokens;
+    const options = { // to modify cookies from server only and not from frontend
+        httpOnly: true,
+        secure: true
+    }
+    res.status(200).cookie("accessToke", accessToken, options).cookie("refreshToken", refreshToken, options)
+    .json(new ApiResponse(200, {user, accessToken, refreshToken}, "user is logged in"));
+    // above we have to send accessToken and refresh tokens in response if developer wants to save it in App and login through mobile app
+    // in case of mobile app there is no coockie so dev can save it in storage. 
+});
+
+const logoutUser = asyncHandler(async (req, res, next) => {
+    await User.findByIdAndUpdate(req.user._id, { $set: {refreshToken: undefined} }, {new: true}); // third is optional to give response with updated info;
+    const options = { // to modify cookies from server only and not from frontend
+        httpOnly: true,
+        secure: true
+    }
+
+    res.status(200).clearCookie("accessToken", options).clearCookie("refreshToken", options)
+    .json(new ApiResponse(200, {}, "user logged out successfully"));
+
 })
 
-export {registerUser};
+export {registerUser, loginUser, logoutUser};

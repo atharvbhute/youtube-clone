@@ -1,6 +1,7 @@
 import { Router } from "express";
-import { registerUser } from "../controllers/user.controller.js";
+import { loginUser, logoutUser, registerUser } from "../controllers/user.controller.js";
 import { upload } from "../middlewares/multer.middleware.js";
+import verifyUserByJwt from "../middlewares/auth.middleware.js"
 
 const userRouter = Router();
 
@@ -8,5 +9,9 @@ userRouter.route("/register").post(upload.fields([
     {name: "avatar", maxCount: 1},
     {name: "coverImage", maxCount: 1}
 ]),registerUser);
+
+userRouter.route("/login").post(loginUser);
+
+userRouter.route("/logout").post(verifyUserByJwt, logoutUser);
 
 export {userRouter};
