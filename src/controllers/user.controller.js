@@ -135,7 +135,7 @@ const logoutUser = asyncHandler(async (req, res, next) => {
 
 });
 
-const updateAccessToken = asyncHandler(async (req, res, next) => {
+const updateAccessToken = asyncHandler(async (req, res) => {
     const incommingRefreshToken = req.cookies.refreshToken || req.header("Authorization")?.relace("Bearer ", "");
     if (!incommingRefreshToken) {
         throw new Error(201, "refreshToken not recieved");
@@ -163,6 +163,39 @@ const updateAccessToken = asyncHandler(async (req, res, next) => {
     return res.status(200).cookie("accessToken", accessToken, options).cookie("refreshToken", refreshToken, options)
     .json(new ApiResponse(200, {user: loggedInUser, accessToken, refreshToken}, "user is logged in"));
     
-})
+});
 
-export {registerUser, loginUser, logoutUser, updateAccessToken};
+const updatePassword = asyncHandler(async (req, res, next)=>{
+    const {oldPassword, newPassword} = req.body;
+    if (!oldPassword &&  !newPassword) {
+        throw new ApiErrors(201, "both the fields are required");
+    }
+
+    const user = await User.findById(req.user._id);
+
+    if (!user) {
+        throw new ApiErrors(401, "unauthorized user");
+    }
+    const isOldPasswordCorrect = await user.isPasswordCorrect(oldPassword);
+    if (!isOldPasswordCorrect) {
+        throw new ApiErrors(203, "old passowrd is incorrect");
+    }
+
+    user.password = newPassword;
+    try {
+        await user.save({validateBeforeSave: false});
+    } catch (error) {
+        throw new ApiErrors(error?.code, error?.message)
+        
+    }
+    return res.status(200).json(new ApiResponse(200, {}, "password changed succesfully"));
+});
+
+const updateUserInfo = asyncHandler(async (req, res, next) => { 
+    const {username, email, fullName} = req.body;
+    const {avatar, coverImage} = req.files;
+    console.log(username, email, fullName, avatar[0].path, coverImage[0].path);
+
+});
+
+export {registerUser, loginUser, logoutUser, updateAccessToken, updatePassword, updateUserInfo};
