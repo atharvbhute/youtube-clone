@@ -15,7 +15,6 @@ const uploadCloudinary = async (localFilePath) => { // localFilepath is a Filepa
     return cloudinaryReturn;
   } catch (error) {
     fs.unlinkSync(localFilePath); // remove locally saves file 
-    console.log(error);
     return null;
   }
 };

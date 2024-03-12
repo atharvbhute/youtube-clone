@@ -37,8 +37,6 @@ const registerUser = asyncHandler(async(req, res, _) => {
         }
     }
 
-    console.log(req.files);
-
     if (req.files && Array.isArray(req.files.avatar)) {
         avatarFilePath = req.files.avatar[0].path;
         avatarUploadedSuccess =  await uploadCloudinary(avatarFilePath);
@@ -192,10 +190,40 @@ const updatePassword = asyncHandler(async (req, res, next)=>{
 });
 
 const updateUserInfo = asyncHandler(async (req, res, next) => { 
-    const {username, email, fullName} = req.body;
+    const user = await User.findById(req.user._id);
+    if (!user) {
+        throw new ApiErrors(401, "Unauthorised Request");
+    }
     const {avatar, coverImage} = req.files;
-    console.log(username, email, fullName, avatar[0].path, coverImage[0].path);
+    if (avatar != undefined) {
+        const imageFilePath = avatar[0].path;
+        const uploadedImage = await uploadCloudinary(imageFilePath);
+        if (!uploadedImage) {
+            throw new ApiErrors(500, "failed to upload image on cloudinary");
+        }
+        user.avatar = uploadedImage.url;
+    }
 
+    if (coverImage != undefined) {
+        const imageFilePath = coverImage[0].path;
+        const uploadedImage = await uploadCloudinary(imageFilePath);
+        if (!uploadedImage) {
+            throw new ApiErrors(500, "failed to upload image on cloudinary");
+        }
+        user.coverImage = uploadedImage.url;
+    }
+
+    const valuesToBeUpdated = Object.keys(req.body);
+    valuesToBeUpdated.forEach((field) => {
+        user[field] = req.body[field];
+    });
+    try {
+       await user.save({validateBeforeSave: false});
+       const updatedUser = await User.findById(req.user._id).select("-password -refreshToken");
+       return res.status(200).json(new ApiResponse(200, updatedUser, "user details updated sucessfully"))
+    } catch (error) {
+        throw new ApiErrors(501, "something went wrong");
+    }
 });
 
 export {registerUser, loginUser, logoutUser, updateAccessToken, updatePassword, updateUserInfo};
