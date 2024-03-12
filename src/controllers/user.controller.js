@@ -163,7 +163,7 @@ const updateAccessToken = asyncHandler(async (req, res) => {
     
 });
 
-const updatePassword = asyncHandler(async (req, res, next)=>{
+const updatePassword = asyncHandler(async (req, res)=>{
     const {oldPassword, newPassword} = req.body;
     if (!oldPassword &&  !newPassword) {
         throw new ApiErrors(201, "both the fields are required");
@@ -189,7 +189,7 @@ const updatePassword = asyncHandler(async (req, res, next)=>{
     return res.status(200).json(new ApiResponse(200, {}, "password changed succesfully"));
 });
 
-const updateUserInfo = asyncHandler(async (req, res, next) => { 
+const updateUserInfo = asyncHandler(async (req, res) => { 
     const user = await User.findById(req.user._id);
     if (!user) {
         throw new ApiErrors(401, "Unauthorised Request");
@@ -226,4 +226,13 @@ const updateUserInfo = asyncHandler(async (req, res, next) => {
     }
 });
 
-export {registerUser, loginUser, logoutUser, updateAccessToken, updatePassword, updateUserInfo};
+const getCurrentUser = asyncHandler(async (req, res) => {
+    const user = await User.findById(req.user._id).select("-password -refreshToken");
+    if (!user) {
+        throw new ApiErrors(501, "Could'nt find user from server");
+    }
+    return res.status(200).json(new ApiResponse(200, user));
+
+})
+
+export {registerUser, loginUser, logoutUser, updateAccessToken, updatePassword, updateUserInfo, getCurrentUser};
