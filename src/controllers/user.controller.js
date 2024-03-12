@@ -3,6 +3,7 @@ import asyncHandler from "../utils/asyncHandler.js";
 import {User} from "../models/user.model.js"
 import uploadCloudinary from "../utils/cloudinary.js";
 import ApiResponse from "../utils/apiResponse.js";
+import Jwt from "jsonwebtoken"
  
 const registerUser = asyncHandler(async(req, res, _) => {
     // get user details from frontens
@@ -74,8 +75,8 @@ const registerUser = asyncHandler(async(req, res, _) => {
 const generateAccessAndRefreshToken = async(userId) => {
     try {
         const user = await User.findById(userId);
-        const accessToken =  user.generateAccessToken();
-        const refreshToken = user.generateRefreshToken();
+        const accessToken = await user.generateAccessToken();
+        const refreshToken = await user.generateRefreshToken();
         user.refreshToken = refreshToken;
         await user.save({validateBeforeSave : false});
         return {accessToken, refreshToken};
@@ -87,14 +88,14 @@ const generateAccessAndRefreshToken = async(userId) => {
 const loginUser = asyncHandler(async (req, res, _)=> {
     // get data from body
     const {username, email, password} = req.body;
-    //username or email
-    if (!username || !password) {
-        throw new ApiErrors(401, "Email or Password is required");
+    if (!(username || email)) {
+        throw new ApiErrors(401, "Email or username is required");
     }
     // find the user
     const user = await User.findOne({
-        $or: {username, password}
-    }).select("-password"); // not selecting password so that can send direct object in response
+        $or: [{username}, {password}]
+    }).select();
+
 
     if (!user) {
         throw new ApiErrors(404, "user does not exist");
@@ -114,8 +115,10 @@ const loginUser = asyncHandler(async (req, res, _)=> {
         httpOnly: true,
         secure: true
     }
-    res.status(200).cookie("accessToke", accessToken, options).cookie("refreshToken", refreshToken, options)
-    .json(new ApiResponse(200, {user, accessToken, refreshToken}, "user is logged in"));
+    const loggedInUser = await User.findById(user._id).select("-password -refreshToken");
+    return res.status(200).cookie("accessToken", accessToken, options).cookie("refreshToken", refreshToken, options)
+    .json(new ApiResponse(200, {user: loggedInUser, accessToken, refreshToken}, "user is logged in"));
+    
     // above we have to send accessToken and refresh tokens in response if developer wants to save it in App and login through mobile app
     // in case of mobile app there is no coockie so dev can save it in storage. 
 });
@@ -130,6 +133,36 @@ const logoutUser = asyncHandler(async (req, res, next) => {
     res.status(200).clearCookie("accessToken", options).clearCookie("refreshToken", options)
     .json(new ApiResponse(200, {}, "user logged out successfully"));
 
+});
+
+const updateAccessToken = asyncHandler(async (req, res, next) => {
+    const incommingRefreshToken = req.cookies.refreshToken || req.header("Authorization")?.relace("Bearer ", "");
+    if (!incommingRefreshToken) {
+        throw new Error(201, "refreshToken not recieved");
+    }
+
+    const decodedToken = await Jwt.verify(incommingRefreshToken, process.env.REFRESH_TOKEN_KEY);
+    if (!decodedToken) {
+        throw new ApiErrors(500, "failed to validate token");
+    } 
+
+    const user = await User.findById(decodedToken._id);
+    if (!user) {
+        throw new ApiErrors(500, "user not found");
+    }
+
+    const {accessToken, refreshToken} = await generateAccessAndRefreshToken(user._id);
+    
+    const options = { // to modify cookies from server only and not from frontend
+        httpOnly: true,
+        secure: true
+    }
+
+    const loggedInUser = await User.findById(user._id).select("-password -refreshToken");
+
+    return res.status(200).cookie("accessToken", accessToken, options).cookie("refreshToken", refreshToken, options)
+    .json(new ApiResponse(200, {user: loggedInUser, accessToken, refreshToken}, "user is logged in"));
+    
 })
 
-export {registerUser, loginUser, logoutUser};
+export {registerUser, loginUser, logoutUser, updateAccessToken};

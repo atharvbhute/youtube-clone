@@ -1,11 +1,12 @@
-import { User } from "../models/user.model";
-import ApiErrors from "../utils/apiErrors";
-import asyncHandler from "../utils/asyncHandler";
+import { User } from "../models/user.model.js";
+import ApiErrors from "../utils/apiErrors.js";
+import asyncHandler from "../utils/asyncHandler.js";
 import jwt from "jsonwebtoken";
 
 // this middleware will verify if user us Authurized and can be used wherever need authorsation. 
 const verifyUserByJwt = asyncHandler(async (req, _, next) => {
-    const accessToken = req.cookie?.accessToken || req.header("Authorization")?.relace("Bearer ", "");
+    const accessToken = req.cookies?.accessToken || req.header("Authorization")?.relace("Bearer ", "");
+    console.log(req);
     if(!accessToken){
         throw new ApiErrors(401, "Unauthorised request");
     }

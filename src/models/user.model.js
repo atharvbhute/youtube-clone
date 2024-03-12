@@ -2,6 +2,7 @@ import mongoose, { Schema } from "mongoose";
 import bcrypt from "bcrypt";
 import Jwt from "jsonwebtoken";
 
+
 const userSchema = new Schema(
   {
     username: {
@@ -64,8 +65,8 @@ userSchema.methods.isPasswordCorrect = async function (password) {
   return await bcrypt.compare(password, this.password);
 }; //here we have assigned a custome method to check if the password that user gave is correct or not.
 
-userSchema.method.generateAccessToken = function () {
-    return token = Jwt.sign({
+userSchema.methods.generateAccessToken = function () {
+    return Jwt.sign({
         _id : this._id,
         username: this.username,
         email: this.email,
@@ -75,8 +76,8 @@ userSchema.method.generateAccessToken = function () {
     });
 };
 
-userSchema.method.generateRefreshToken = function () {
-    return token = Jwt.sign({
+userSchema.methods.generateRefreshToken = function () {
+    return Jwt.sign({
         _id : this._id,
     }, process.env.REFRESH_TOKEN_KEY, {
         expiresIn: process.env.REFRESH_TOKEN_EXPIRY
