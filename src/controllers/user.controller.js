@@ -4,6 +4,7 @@ import {User} from "../models/user.model.js"
 import uploadCloudinary from "../utils/cloudinary.js";
 import ApiResponse from "../utils/apiResponse.js";
 import Jwt from "jsonwebtoken"
+import mongoose from "mongoose";
  
 const registerUser = asyncHandler(async(req, res, _) => {
     // get user details from frontens
@@ -235,4 +236,116 @@ const getCurrentUser = asyncHandler(async (req, res) => {
 
 })
 
-export {registerUser, loginUser, logoutUser, updateAccessToken, updatePassword, updateUserInfo, getCurrentUser};
+const getUserChannelInfo = asyncHandler(async (req, res, next) => {
+    const username = req.params.username;
+    if (!username?.trim()) {
+        throw new ApiErrors(201, "Invalid User");
+    }
+    const channel = await User.aggregate([
+        {
+            $match : {username : username.toLowerCase()}
+        },
+        {
+            $lookup :{
+                from: "subscriptions",
+                localField: "_id",
+                foreignField: "channel",
+                as: "subscribers"
+            }
+        },
+        {
+            $lookup :{
+                from: "subscriptions",
+                localField: "_id",
+                foreignField: "subscriber",
+                as: "subscriptions"
+            }
+        },
+        {
+            $addFields: {
+                subscribersCount: {
+                    $size: "$subscriptions"
+                },
+
+                subscriptionCount: {
+                    $size: "$subscriptions"
+                },
+
+                isSubscribed : {
+                    $cond : {
+                        if: {$in : [req.user?._id, "$subscribers.subscriber"]},
+                        then: true,
+                        else: false
+                    }
+                }
+            }
+        },
+        {
+            $project:{
+                username: 1,
+                fullName: 1,
+                email: 1,
+                subscribersCount: 1,
+                subscriptionCount: 1,
+                isSubscribed: 1,
+                avatar: 1,
+                coverImage: 1
+            }
+        }
+        
+    ]);
+
+    return res.status(200).json(new ApiResponse(200, channel[0], "success"));
+});
+
+const getWatchHistory = asyncHandler( async (req, res) => {
+    const userId = req.user._id;
+    if (!userId) {
+        throw new ApiErrors(201, "Unauthorised Request ");
+    }
+    const watchHistoryOfUser = await User.aggregate([
+        {
+            $match :{
+                _id: new mongoose.Types.ObjectId(userId)
+            },
+        },
+        {
+            $lookup : {
+                from: "videos",
+                localField: "_id",
+                foreignField: "owner",
+                as: "watchHistory",
+                pipeline: [
+                    {
+                        $lookup:{
+                            from: "users",
+                            localField: "owner",
+                            foreignField: "_id",
+                            as: "owner",
+                            pipeline : [{
+                                $project: {
+                                    username: 1,
+                                    fullName: 1,
+                                    avatar: 1
+                                },
+                            }]
+                        }
+                    }, 
+                    {
+                        $addFields: {
+                            owner: {
+                                $first : "$owner"
+                            }
+                        }
+                    }
+                ]
+            },
+        },
+        
+    ]);
+
+    return res.status(200).json(new ApiResponse(200, watchHistoryOfUser[0].watchHistory,"success"));
+
+});
+
+export {getWatchHistory, registerUser, loginUser, logoutUser, updateAccessToken, updatePassword, updateUserInfo, getCurrentUser, getUserChannelInfo};
